@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, KeyRound, Save, Server, Shield, Trash2 } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff, KeyRound, Save, Server, Shield, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,6 +13,8 @@ import { toast } from 'sonner'
 export function AccountSettings() {
   const { data: health } = useHealth()
   const [apiKeys, setApiKeys] = useState<BusinessApiKey[]>([])
+  const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({})
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [keyLabel, setKeyLabel] = useState('External integration')
   const [newApiKey, setNewApiKey] = useState('')
@@ -83,6 +85,21 @@ export function AccountSettings() {
     toast.success('API key copied')
   }
 
+  const toggleKeyVisibility = (id: string) => {
+    setVisibleKeys(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const copyExistingKey = async (key: BusinessApiKey) => {
+    if (key.key_value) {
+      await navigator.clipboard.writeText(key.key_value)
+      setCopiedKeyId(key.id)
+      setTimeout(() => setCopiedKeyId(null), 2000)
+      toast.success('API key copied to clipboard')
+    } else {
+      toast.info('This is an earlier key whose plain text was not saved. Create a new key above to view and copy anytime.')
+    }
+  }
+
   const apiBase = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin
 
   return (
@@ -120,8 +137,42 @@ export function AccountSettings() {
           <div className="divide-y rounded-lg border">
             {apiKeys.map(key => (
               <div key={key.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
-                <div className="min-w-0"><p className="truncate font-medium">{key.label}</p><p className="font-mono text-xs text-muted-foreground">{key.key_prefix}••••••••</p></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">{key.last_used_at ? 'Used' : 'Not used'}</Badge><Button variant="ghost" size="icon" aria-label="Revoke API key" disabled={loading} onClick={() => void revokeApiKey(key)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{key.label}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="font-mono text-xs text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+                      {visibleKeys[key.id] && key.key_value
+                        ? key.key_value
+                        : `${key.key_prefix}••••••••••••••••••••`}
+                    </code>
+                    {key.key_value && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => toggleKeyVisibility(key.id)}
+                        title={visibleKeys[key.id] ? 'Hide key' : 'View key'}
+                      >
+                        {visibleKeys[key.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-primary" />}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      onClick={() => void copyExistingKey(key)}
+                      title="Copy API key"
+                    >
+                      {copiedKeyId === key.id ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{key.last_used_at ? 'Used' : 'Not used'}</Badge>
+                  <Button variant="ghost" size="icon" aria-label="Revoke API key" disabled={loading} onClick={() => void revokeApiKey(key)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
             {!apiKeys.length && <p className="p-4 text-sm text-muted-foreground">No active API keys.</p>}

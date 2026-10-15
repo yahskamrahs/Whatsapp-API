@@ -10,7 +10,8 @@ import {
   Smartphone,
   History,
   Bot,
-  MessagesSquare
+  MessagesSquare,
+  Terminal
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ const navItems = [
   { to: '/messages', icon: MessageSquare, label: 'Send Message' },
   { to: '/history', icon: History, label: 'Message History' },
   { to: '/chats', icon: MessagesSquare, label: 'Chats' },
+  { to: '/api-docs', icon: Terminal, label: 'API & Integration' },
   { to: '/auto-reply', icon: Bot, label: 'Auto Reply' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/settings', icon: Settings, label: 'Settings' },

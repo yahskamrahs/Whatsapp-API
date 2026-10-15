@@ -138,6 +138,7 @@ export interface AuthResponse {
 export interface BusinessApiKey {
   id: string
   key_prefix: string
+  key_value?: string | null
   label: string
   created_at: string
   last_used_at: string | null

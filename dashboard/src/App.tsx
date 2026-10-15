@@ -12,6 +12,7 @@ import { Chats } from '@/pages/Chats'
 import { Logs } from '@/pages/Logs'
 import { AccountSettings as Settings } from '@/pages/AccountSettings'
 import { AutoReply } from '@/pages/AutoReply'
+import { ApiDocs } from '@/pages/ApiDocs'
 import { api, type AuthResponse } from '@/lib/api'
 import { ForcePasswordChange } from '@/components/ForcePasswordChange'
 import { SuperAdmin } from '@/pages/SuperAdmin'
@@ -88,6 +89,7 @@ function App() {
             <Route path="messages" element={<Messages />} />
             <Route path="history" element={<History />} />
             <Route path="chats" element={<Chats />} />
+            <Route path="api-docs" element={<ApiDocs />} />
             <Route path="auto-reply" element={<AutoReply />} />
             <Route path="logs" element={<Logs />} />
             <Route path="settings" element={<Settings />} />

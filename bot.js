@@ -125,6 +125,7 @@ function migrateTenantSchema() {
             business_id TEXT NOT NULL,
             key_hash TEXT NOT NULL UNIQUE,
             key_prefix TEXT NOT NULL,
+            key_value TEXT,
             label TEXT NOT NULL DEFAULT 'Default key',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             last_used_at TEXT,
@@ -150,6 +151,7 @@ function migrateTenantSchema() {
         addColumnIfMissing('logs', 'business_id', 'TEXT')
         addColumnIfMissing('auto_replies', 'business_id', 'TEXT')
         addColumnIfMissing('pdf_compression_jobs', 'business_id', 'TEXT')
+        addColumnIfMissing('business_api_keys', 'key_value', 'TEXT')
 
         const autoReplySchema = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'auto_replies'").get()?.sql || ''
         if (/trigger_word\s+TEXT\s+UNIQUE/i.test(autoReplySchema)) {
@@ -198,15 +200,15 @@ function migrateTenantSchema() {
         `).get(DEFAULT_BUSINESS_ID)
         if (legacyKey) {
             db.prepare(`
-                INSERT OR IGNORE INTO business_api_keys (id, business_id, key_hash, key_prefix, label)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(crypto.randomUUID(), DEFAULT_BUSINESS_ID, hashSecret(legacyKey), legacyKey.slice(0, 10), 'Migrated API key')
+                INSERT OR IGNORE INTO business_api_keys (id, business_id, key_hash, key_prefix, key_value, label)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(crypto.randomUUID(), DEFAULT_BUSINESS_ID, hashSecret(legacyKey), legacyKey.slice(0, 10), legacyKey, 'Migrated API key')
         } else if (!existingDefaultKey) {
             const generatedKey = `wa_${crypto.randomBytes(24).toString('hex')}`
             db.prepare(`
-                INSERT INTO business_api_keys (id, business_id, key_hash, key_prefix, label)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(crypto.randomUUID(), DEFAULT_BUSINESS_ID, hashSecret(generatedKey), generatedKey.slice(0, 10), 'Default API key')
+                INSERT INTO business_api_keys (id, business_id, key_hash, key_prefix, key_value, label)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(crypto.randomUUID(), DEFAULT_BUSINESS_ID, hashSecret(generatedKey), generatedKey.slice(0, 10), generatedKey, 'Default API key')
         }
         db.prepare('DELETE FROM config WHERE key = ?').run('api_key')
 
@@ -608,9 +610,9 @@ function createBusinessApiKey(businessId, label = 'Default key') {
     const key = `wa_${crypto.randomBytes(24).toString('hex')}`
     const id = crypto.randomUUID()
     db.prepare(`
-        INSERT INTO business_api_keys (id, business_id, key_hash, key_prefix, label)
-        VALUES (?, ?, ?, ?, ?)
-    `).run(id, businessId, hashSecret(key), key.slice(0, 10), label)
+        INSERT INTO business_api_keys (id, business_id, key_hash, key_prefix, key_value, label)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, businessId, hashSecret(key), key.slice(0, 10), key, label)
     return { id, key }
 }
 
@@ -714,7 +716,7 @@ app.post('/api/admin/businesses/:businessId/impersonate', (req, res) => {
 
 app.get('/api/business/api-keys', (req, res) => {
     const apiKeys = db.prepare(`
-        SELECT id, key_prefix, label, created_at, last_used_at FROM business_api_keys
+        SELECT id, key_prefix, key_value, label, created_at, last_used_at FROM business_api_keys
         WHERE business_id = ? AND revoked_at IS NULL ORDER BY created_at DESC
     `).all(req.auth.businessId)
     res.json({ success: true, apiKeys })
