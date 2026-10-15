@@ -19,6 +19,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - WHATSAPP_AUTH_ROOT=/app/auth_info_baileys
+      - SQLITE_DB_PATH=/app/data/logs.db
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s

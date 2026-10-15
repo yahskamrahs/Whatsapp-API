@@ -9,7 +9,8 @@ import {
   X,
   Smartphone,
   History,
-  Bot
+  Bot,
+  MessagesSquare
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -17,12 +18,14 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
 import { useHealth } from '@/hooks/useApi'
 import { cn } from '@/lib/utils'
+import type { AuthUser, BusinessInfo } from '@/lib/api'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/connection', icon: Link2, label: 'Connection' },
   { to: '/messages', icon: MessageSquare, label: 'Send Message' },
   { to: '/history', icon: History, label: 'Message History' },
+  { to: '/chats', icon: MessagesSquare, label: 'Chats' },
   { to: '/auto-reply', icon: Bot, label: 'Auto Reply' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -120,7 +123,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-export function Layout() {
+interface LayoutProps {
+  user: AuthUser
+  business: BusinessInfo | null
+  onLogout: () => void
+  onExitImpersonation: () => void
+}
+
+export function Layout({ user, business, onLogout, onExitImpersonation }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -144,7 +154,19 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="mx-auto max-w-7xl p-6 lg:p-8">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{business?.name || 'Business workspace'}</p>
+              <p className="truncate text-xs text-muted-foreground">Signed in as {user.username}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {user.impersonating && (
+                <Button size="sm" variant="outline" onClick={onExitImpersonation}>Return to Super Admin</Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={onLogout}>Sign out</Button>
+            </div>
+          </div>
           <Outlet />
         </div>
       </main>

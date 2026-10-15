@@ -5,6 +5,7 @@ dashboard/node_modules/
 # Database and logs
 logs.db
 logs.db-journal
+*.bak
 *.log
 
 # WhatsApp session data (sensitive!)

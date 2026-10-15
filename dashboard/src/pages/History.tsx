@@ -34,14 +34,13 @@ interface MessageLog extends LogEntry {
   }
 }
 
-function formatPhoneNumber(jid: string): string {
-  // Remove @s.whatsapp.net or @g.us
-  const number = jid?.replace(/@.*/, '') || 'Unknown'
-  // Format with + if it looks like a phone number
-  if (/^\d+$/.test(number)) {
-    return '+' + number
+function formatContact(jid: string, resolvedJids: Record<string, string>): string {
+  const resolvedJid = resolvedJids[jid] || jid
+  const identifier = resolvedJid?.split('@')[0]?.replace(/:\d+$/, '') || 'Unknown'
+  if (/^\d+$/.test(identifier) && !resolvedJid.endsWith('@lid')) {
+    return `+${identifier}`
   }
-  return number
+  return resolvedJid.endsWith('@lid') ? `WhatsApp ID ${identifier}` : identifier
 }
 
 function formatTime(timestamp: string): string {
@@ -66,11 +65,10 @@ function formatTime(timestamp: string): string {
   })
 }
 
-function MessageCard({ message, type }: { message: MessageLog; type: 'out' | 'in' }) {
+function MessageCard({ message, type, resolvedJids }: { message: MessageLog; type: 'out' | 'in'; resolvedJids: Record<string, string> }) {
   const isOutgoing = type === 'out'
-  const contact = isOutgoing
-    ? formatPhoneNumber(message.details.to || '')
-    : formatPhoneNumber(message.details.from || '')
+  const contactJid = isOutgoing ? message.details.to || '' : message.details.from || ''
+  const contact = formatContact(contactJid, resolvedJids)
 
   // Enhanced content extraction with file type information
   let content = ''
@@ -92,7 +90,10 @@ function MessageCard({ message, type }: { message: MessageLog; type: 'out' | 'in
     }
   } else {
     // Text message - use preview, content, or caption
-    content = message.details.preview || message.details.content || message.details.caption || ''
+    const autoReplyContent = message.message.startsWith('Auto-replied: ')
+      ? message.message.slice('Auto-replied: '.length)
+      : ''
+    content = message.details.preview || message.details.content || message.details.caption || autoReplyContent
   }
   
   return (
@@ -152,6 +153,7 @@ export function History() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('outgoing')
+  const [resolvedJids, setResolvedJids] = useState<Record<string, string>>({})
 
   const fetchMessages = async () => {
     setLoading(true)
@@ -160,8 +162,21 @@ export function History() {
         api.getLogs(100, 'message_out'),
         api.getLogs(100, 'message_in')
       ])
-      setOutgoing(outRes.logs as MessageLog[])
-      setIncoming(inRes.logs as MessageLog[])
+      const nextOutgoing = outRes.logs as MessageLog[]
+      const nextIncoming = inRes.logs as MessageLog[]
+      setOutgoing(nextOutgoing)
+      setIncoming(nextIncoming)
+
+      const jids = [...new Set([
+        ...nextOutgoing.map(message => message.details.to),
+        ...nextIncoming.map(message => message.details.from)
+      ].filter((jid): jid is string => Boolean(jid && jid.endsWith('@lid'))))]
+      try {
+        const result = await api.resolveJids(jids)
+        setResolvedJids(result.mappings)
+      } catch {
+        setResolvedJids({})
+      }
     } catch (error) {
       console.error('Failed to fetch messages:', error)
     } finally {
@@ -183,7 +198,8 @@ export function History() {
       m.details.to?.toLowerCase().includes(term) ||
       m.details.from?.toLowerCase().includes(term) ||
       m.details.preview?.toLowerCase().includes(term) ||
-      m.details.content?.toLowerCase().includes(term)
+      m.details.content?.toLowerCase().includes(term) ||
+      resolvedJids[m.details.to || m.details.from || '']?.toLowerCase().includes(term)
     )
   }
 
@@ -319,7 +335,7 @@ export function History() {
                 ) : (
                   <div className="space-y-3">
                     {filteredOutgoing.map((msg) => (
-                      <MessageCard key={msg.id} message={msg} type="out" />
+                      <MessageCard key={msg.id} message={msg} type="out" resolvedJids={resolvedJids} />
                     ))}
                   </div>
                 )}
@@ -339,7 +355,7 @@ export function History() {
                 ) : (
                   <div className="space-y-3">
                     {filteredIncoming.map((msg) => (
-                      <MessageCard key={msg.id} message={msg} type="in" />
+                      <MessageCard key={msg.id} message={msg} type="in" resolvedJids={resolvedJids} />
                     ))}
                   </div>
                 )}

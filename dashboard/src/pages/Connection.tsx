@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { 
   Smartphone, 
   Link2, 
@@ -36,9 +36,44 @@ export function Connection() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [pairingMode, setPairingMode] = useState<'code' | 'qr'>('code')
+  const [qrActive, setQrActive] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [qrError, setQrError] = useState('')
 
   const isConnected = status?.connection?.connected
   const connectedNumber = status?.connection?.number
+
+  useEffect(() => {
+    if (pairingMode !== 'qr' || !qrActive) return
+
+    let cancelled = false
+    const pollQr = async () => {
+      try {
+        const result = await api.getPairingQr()
+        if (cancelled) return
+        setQrDataUrl(result.qrCode || '')
+        setQrError(result.error || '')
+        if (result.connected) {
+          setQrActive(false)
+          setQrDataUrl('')
+          refetch()
+          toast.success('WhatsApp connected!')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setQrError(error instanceof Error ? error.message : 'Failed to load QR code')
+        }
+      }
+    }
+
+    void pollQr()
+    const interval = window.setInterval(pollQr, 1500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [pairingMode, qrActive, refetch])
 
   const handleRequestPairing = async () => {
     if (!phoneNumber) {
@@ -57,8 +92,29 @@ export function Connection() {
       } else {
         toast.error(result.error || 'Failed to generate pairing code')
       }
-    } catch {
-      toast.error('Failed to connect to API')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to connect to API')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRequestQr = async () => {
+    setLoading(true)
+    setQrActive(false)
+    setQrDataUrl('')
+    setQrError('')
+
+    try {
+      const result = await api.requestQr()
+      if (result.success) {
+        setQrActive(true)
+        toast.success('Waiting for WhatsApp QR code...')
+      } else {
+        setQrError(result.error || 'Failed to start QR pairing')
+      }
+    } catch (error) {
+      setQrError(error instanceof Error ? error.message : 'Failed to start QR pairing')
     } finally {
       setLoading(false)
     }
@@ -167,6 +223,9 @@ export function Connection() {
                   {connectedNumber && (
                     <p className="text-sm text-muted-foreground">+{connectedNumber}</p>
                   )}
+                  {!isConnected && status?.connection?.error && (
+                    <p className="mt-1 text-xs text-destructive">{status.connection.error}</p>
+                  )}
                 </div>
               </div>
               <Badge variant={isConnected ? "default" : "secondary"}>
@@ -216,34 +275,91 @@ export function Connection() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                placeholder="60123456789"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the phone number with country code (without + or spaces)
-              </p>
+            <div className="flex gap-2" role="tablist" aria-label="Pairing method">
+              <Button
+                type="button"
+                role="tab"
+                aria-selected={pairingMode === 'code'}
+                variant={pairingMode === 'code' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setPairingMode('code')}
+              >
+                Pairing code
+              </Button>
+              <Button
+                type="button"
+                role="tab"
+                aria-selected={pairingMode === 'qr'}
+                variant={pairingMode === 'qr' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setPairingMode('qr')}
+              >
+                QR code
+              </Button>
             </div>
 
-            <Button 
-              onClick={handleRequestPairing}
-              disabled={loading || !phoneNumber}
-              className="w-full"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Link2 className="w-4 h-4 mr-2" />
-              )}
-              Generate Pairing Code
-            </Button>
+            {pairingMode === 'code' ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="60123456789"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the phone number with country code (without + or spaces)
+                  </p>
+                </div>
 
-            {pairingCode && (
+                <Button
+                  onClick={handleRequestPairing}
+                  disabled={loading || !phoneNumber}
+                  className="w-full"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2 className="w-4 h-4 mr-2" />
+                  )}
+                  Generate Pairing Code
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={handleRequestQr} disabled={loading || isConnected} className="w-full">
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2 className="w-4 h-4 mr-2" />
+                  )}
+                  Generate QR Code
+                </Button>
+                <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30 p-4 text-center">
+                  {qrDataUrl ? (
+                    <img src={qrDataUrl} alt="WhatsApp device linking QR code" className="h-64 w-64 max-w-full rounded bg-white p-2" />
+                  ) : qrError ? (
+                    <p className="text-sm text-destructive">{qrError}</p>
+                  ) : qrActive ? (
+                    <>
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Waiting for WhatsApp to provide a QR code...</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Generate a QR code to link this device.</p>
+                  )}
+                  {qrDataUrl && (
+                    <p className="text-xs text-muted-foreground">
+                      On your phone, open WhatsApp → Linked Devices → Link a Device, then scan this code.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {pairingMode === 'code' && pairingCode && (
               <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-3">
                 <p className="text-sm text-center text-muted-foreground">
                   Your pairing code:

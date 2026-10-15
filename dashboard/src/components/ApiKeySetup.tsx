@@ -1,25 +1,26 @@
 import { useState } from 'react'
-import { Key, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { LockKeyhole, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api, setApiKey } from '@/lib/api'
+import { api, type AuthResponse } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface ApiKeySetupProps {
-  onSuccess: () => void
+  onSuccess: (auth: AuthResponse) => void
 }
 
 export function ApiKeySetup({ onSuccess }: ApiKeySetupProps) {
-  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!apiKeyInput.trim()) {
-      setError('Please enter an API key')
+    if (!username.trim() || !password) {
+      setError('Enter your username and password')
       return
     }
 
@@ -27,16 +28,11 @@ export function ApiKeySetup({ onSuccess }: ApiKeySetupProps) {
     setError('')
 
     try {
-      const valid = await api.validateApiKey(apiKeyInput.trim())
-      if (valid) {
-        setApiKey(apiKeyInput.trim())
-        toast.success('API key validated successfully!')
-        onSuccess()
-      } else {
-        setError('Invalid API key. Check the key and try again.')
-      }
-    } catch {
-      setError('Failed to validate API key. Is the bot running?')
+      const auth = await api.login(username.trim(), password)
+      toast.success('Signed in successfully')
+      onSuccess(auth)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to sign in')
     } finally {
       setLoading(false)
     }
@@ -47,24 +43,34 @@ export function ApiKeySetup({ onSuccess }: ApiKeySetupProps) {
       <Card className="w-full max-w-md animate-fade-in-up">
         <CardHeader className="text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-            <Key className="w-8 h-8 text-primary" />
+            <LockKeyhole className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">API Key Required</CardTitle>
+          <CardTitle className="text-2xl">Sign in</CardTitle>
           <CardDescription>
-            Enter your API key to access the dashboard. You can find it in the bot console when you start <code className="bg-muted px-1.5 py-0.5 rounded text-xs">node bot.js</code>
+            Sign in to your business workspace.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="apikey">API Key</Label>
+              <Label htmlFor="username">Username or email</Label>
               <Input
-                id="apikey"
+                id="username"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
                 type="password"
-                placeholder="wa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                className="font-mono"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </div>
 
@@ -87,11 +93,8 @@ export function ApiKeySetup({ onSuccess }: ApiKeySetupProps) {
 
           <div className="mt-6 pt-6 border-t">
             <p className="text-xs text-muted-foreground text-center">
-              The API key is shown in the terminal when you start the bot:
+              Default admin: <code className="font-mono">superadmin@admin.com</code> — you will be required to change the temporary password on first sign-in.
             </p>
-            <pre className="mt-2 p-3 bg-muted rounded-lg text-xs overflow-x-auto">
-              <code>🔐 API Key: wa_abc123...</code>
-            </pre>
           </div>
         </CardContent>
       </Card>

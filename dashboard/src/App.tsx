@@ -8,36 +8,45 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Connection } from '@/pages/Connection'
 import { Messages } from '@/pages/Messages'
 import { History } from '@/pages/History'
+import { Chats } from '@/pages/Chats'
 import { Logs } from '@/pages/Logs'
-import { Settings } from '@/pages/Settings'
+import { AccountSettings as Settings } from '@/pages/AccountSettings'
 import { AutoReply } from '@/pages/AutoReply'
-import { getApiKey, api } from '@/lib/api'
+import { api, type AuthResponse } from '@/lib/api'
+import { ForcePasswordChange } from '@/components/ForcePasswordChange'
+import { SuperAdmin } from '@/pages/SuperAdmin'
 
 function App() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  const [auth, setAuth] = useState<AuthResponse | null>(null)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
+    let active = true
     const checkAuth = async () => {
-      const key = getApiKey()
-      if (!key) {
-        setAuthenticated(false)
-        return
-      }
-
-      // Validate the stored key
       try {
-        const valid = await api.validateApiKey(key)
-        setAuthenticated(valid)
+        const current = await api.getCurrentUser()
+        if (active) setAuth(current)
       } catch {
-        setAuthenticated(false)
+        if (active) setAuth(null)
+      } finally {
+        if (active) setChecking(false)
       }
     }
-
-    checkAuth()
+    void checkAuth()
+    return () => { active = false }
   }, [])
 
-  // Loading state
-  if (authenticated === null) {
+  const refreshAuth = async () => {
+    const current = await api.getCurrentUser()
+    setAuth(current)
+  }
+
+  const handleLogout = async () => {
+    await api.logout()
+    setAuth(null)
+  }
+
+  if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
@@ -45,25 +54,40 @@ function App() {
     )
   }
 
-  // Need API key
-  if (!authenticated) {
+  if (!auth) {
     return (
       <>
-        <ApiKeySetup onSuccess={() => setAuthenticated(true)} />
+        <ApiKeySetup onSuccess={setAuth} />
         <Toaster position="bottom-right" richColors />
       </>
     )
+  }
+
+  if (auth.user.mustChangePassword) {
+    return <ForcePasswordChange username={auth.user.username} onComplete={refreshAuth} />
+  }
+
+  if (auth.user.role === 'superadmin' && !auth.user.impersonating) {
+    return <SuperAdmin user={auth.user} onLogout={handleLogout} onImpersonate={refreshAuth} />
   }
 
   return (
     <TooltipProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Layout />}>
+          <Route path="/" element={(
+            <Layout
+              user={auth.user}
+              business={auth.business}
+              onLogout={handleLogout}
+              onExitImpersonation={async () => { await api.stopImpersonation(); await refreshAuth() }}
+            />
+          )}>
             <Route index element={<Dashboard />} />
             <Route path="connection" element={<Connection />} />
             <Route path="messages" element={<Messages />} />
             <Route path="history" element={<History />} />
+            <Route path="chats" element={<Chats />} />
             <Route path="auto-reply" element={<AutoReply />} />
             <Route path="logs" element={<Logs />} />
             <Route path="settings" element={<Settings />} />

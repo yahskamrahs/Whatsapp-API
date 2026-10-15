@@ -1,11 +1,12 @@
 {
   "dependencies": {
     "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "multer": "^2.0.2",
-    "pino": "^10.2.0"
+    "pino": "^10.2.0",
+    "qrcode": "^1.5.4"
   }
 }
